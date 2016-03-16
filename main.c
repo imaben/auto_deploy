@@ -15,8 +15,10 @@
 #include <getopt.h>
 #include <event.h>
 #include <evhttp.h>
+#include <signal.h>
 #include "daemonize.h"
 #include "worker.h"
+#include "redis.h"
 
 static char *l_host     = "0.0.0.0";
 static short l_port     = 8080;
@@ -107,8 +109,9 @@ void request_handler(struct evhttp_request *req, void *arg)
         if (route_table[i].prefix == NULL && route_table[i].type == 0) {
             break;
         }
-
-        if (strncmp(route_table[i].prefix, decode_uri, strlen(route_table[i].prefix)) == 0) {
+        enum evhttp_cmd_type type = evhttp_request_get_command(req);
+        if (strncmp(route_table[i].prefix, decode_uri, strlen(route_table[i].prefix)) == 0
+                && route_table[i].type == type) {
             route_table[i].callback(req, arg);
             goto end;
         }
@@ -179,20 +182,37 @@ void parse_options(int argc, char **argv)
     }
 }
 
+struct evhttp *g_httpd;
+
+void clean_up(int sign_no)
+{
+    redis_free();
+    evhttp_free(g_httpd);
+    exit(0);
+}
+
 int main(int argc, char **argv)
 {
-    struct evhttp *httpd;
+    sigset_t signal_mask;
+    sigemptyset(&signal_mask);
+    sigaddset(&signal_mask, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &signal_mask, NULL);
+
+    signal(SIGINT, clean_up);
+    signal(SIGQUIT, clean_up);
+    signal(SIGTERM, clean_up);
+
 
     parse_options(argc, argv);
 
     if (daemon_mode) {
         daemonize();
     }
-
+    redis_init(redis_addr, redis_port);
     event_init();
 
-    httpd = evhttp_start(l_host, l_port);
-    evhttp_set_gencb(httpd, request_handler, NULL);
+    g_httpd = evhttp_start(l_host, l_port);
+    evhttp_set_gencb(g_httpd, request_handler, NULL);
     event_dispatch();
 
     return 0;
