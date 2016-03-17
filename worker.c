@@ -18,6 +18,7 @@ static void output(struct evhttp_request *req, char *content, int code)
 {
     struct evbuffer *buf = evbuffer_new();
     evbuffer_add_printf(buf, content);
+    evhttp_add_header(req->output_headers, "Content-Type", "application/json; charset=utf-8");
     evhttp_send_reply(req, code, NULL, buf);
     evbuffer_free(buf);
 }
@@ -73,8 +74,21 @@ void deploy_create(struct evhttp_request *req, void *arg)
             goto end;
         }
 
-        send_normal_request(req, body.c);
+        // return json
+        cJSON *json_ret = cJSON_CreateObject();
+        cJSON_AddItemToObject(json_ret, "id", cJSON_CreateString("aabbcc"));
+        cJSON_AddItemToObject(json_ret, "version", cJSON_CreateString(json_ver->valuestring));
+        cJSON_AddItemToObject(json_ret, "author", cJSON_CreateString(json_author->valuestring));
+        cJSON_AddItemToObject(json_ret, "log_url", cJSON_CreateString("http://xxx.xx"));
+        cJSON_AddItemToObject(json_ret, "create_at", cJSON_CreateString("0000-00-00 00:00:00"));
+        cJSON_AddItemToObject(json_ret, "status", cJSON_CreateString("running"));
+        char *json_encoded = cJSON_Print(json_ret);
+
+        send_normal_request(req, json_encoded);
+
+        free(json_encoded);
         cJSON_Delete(json);
+        cJSON_Delete(json_ret);
     } else {
         // todo: send 400 page
     }
