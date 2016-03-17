@@ -3,6 +3,29 @@
 #include <string.h>
 #include <stdlib.h>
 #include "worker.h"
+#include "smart_str.h"
+#include "cJSON.h"
+
+#define get_buffer_from_req(body, req) do { \
+    smart_str *__str = (smart_str *)body; \
+    struct evbuffer *__buff = evhttp_request_get_input_buffer(req); \
+    size_t __size = evbuffer_get_length(__buff); \
+    smart_str_appendl(__str, evbuffer_pullup(__buff, -1), __size); \
+    smart_str_0(__str); \
+ } while(0)
+
+static void output(struct evhttp_request *req, char *content, int code)
+{
+    struct evbuffer *buf = evbuffer_new();
+    evbuffer_add_printf(buf, content);
+    evhttp_send_reply(req, code, NULL, buf);
+    evbuffer_free(buf);
+}
+
+#define send_bad_request(req, msg) \
+    output(req, msg, HTTP_BADREQUEST)
+#define send_normal_request(req, msg) \
+    output(req, msg, HTTP_OK)
 
 void deploy_show(struct evhttp_request *req, void *arg)
 {
@@ -27,11 +50,36 @@ void deploy_create(struct evhttp_request *req, void *arg)
     const char *orig_uri = "/api/deploy";
     int orig_uri_len = strlen(orig_uri);
     char *decode_uri = strdup((char *)evhttp_request_uri(req));
+    smart_str body = {0};
     if (strcmp(decode_uri, orig_uri) == 0) {
-        // todo: show deploy list
+        get_buffer_from_req(&body, req);
+
+        cJSON *json, *json_ver, *json_author;
+        json = cJSON_Parse(body.c);
+        if (!json) {
+            send_bad_request(req, "params error");
+            goto end;
+        }
+
+        json_ver = cJSON_GetObjectItem(json, "version");
+        if (!json_ver) {
+            send_bad_request(req, "params error");
+            goto end;
+        }
+
+        json_author = cJSON_GetObjectItem(json, "author");
+        if (!json_author) {
+            send_bad_request(req, "params error");
+            goto end;
+        }
+
+        send_normal_request(req, body.c);
+        cJSON_Delete(json);
     } else {
         // todo: send 400 page
     }
+end:
+    smart_str_free(&body);
     free(decode_uri);
 }
 
