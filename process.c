@@ -9,18 +9,6 @@
 
 #define BUFFER_SIZE 512
 
-void catch_stdout(void *data, int len)
-{
-    ((char *)data)[len] = '\0';
-    printf("stdout:%s", (char *)data);
-}
-
-void catch_stderr(void *data, int len)
-{
-    ((char *)data)[len] = '\0';
-    printf("stderr:%s", (char *)data);
-}
-
 struct thread_params {
     int fd;
     output_cb cb;
@@ -34,6 +22,7 @@ static void *thread_proc(void *arg)
     while ((size = read(params->fd, buf, BUFFER_SIZE)) > 0) {
         params->cb(buf, size);
     }
+    return NULL;
 }
 
 int run_process(char *cmd, int mode, output_cb stdoutcb, output_cb stderrcb)
@@ -77,8 +66,8 @@ int run_process(char *cmd, int mode, output_cb stdoutcb, output_cb stderrcb)
     close(slave);
     stdout_pfd[0] = master;
 
-    struct thread_params stdout_p = {fd:stdout_pfd[0], cb:stdoutcb};
-    struct thread_params stderr_p = {fd:stderr_pfd[0], cb:stderrcb};
+    struct thread_params stdout_p = {.fd = stdout_pfd[0], .cb = stdoutcb};
+    struct thread_params stderr_p = {.fd = stderr_pfd[0], .cb = stderrcb};
 
     pthread_t stdout_t = 0, stderr_t = 0;
     if (mode == MODE_CATCH_BOTH) {
@@ -99,13 +88,5 @@ int run_process(char *cmd, int mode, output_cb stdoutcb, output_cb stderrcb)
     close(master);
     int status;
     waitpid(pid, &status, 0);
+    return status;
 }
-
-
-int main (int argc, char **argv)
-{
-    char *cmd = "./test";
-    run_process(cmd, MODE_CATCH_STDERR, catch_stdout, catch_stderr);
-    return 0;
-}
-
