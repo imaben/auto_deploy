@@ -17,7 +17,7 @@
 static void output(struct evhttp_request *req, char *content, int code)
 {
     struct evbuffer *buf = evbuffer_new();
-    evbuffer_add_printf(buf, content);
+    evbuffer_add_printf(buf, "%s", content);
     evhttp_add_header(req->output_headers, "Content-Type", "application/json; charset=utf-8");
     evhttp_send_reply(req, code, NULL, buf);
     evbuffer_free(buf);
