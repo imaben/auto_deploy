@@ -5,6 +5,8 @@
 #include "worker.h"
 #include "smart_str.h"
 #include "cJSON.h"
+#include "utils.h"
+#include "redis.h"
 
 #define get_buffer_from_req(body, req) do { \
     smart_str *__str = (smart_str *)body; \
@@ -27,6 +29,8 @@ static void output(struct evhttp_request *req, char *content, int code)
     output(req, msg, HTTP_BADREQUEST)
 #define send_normal_request(req, msg) \
     output(req, msg, HTTP_OK)
+#define send_internal_request(req, msg) \
+    output(req, msg, HTTP_INTERNAL)
 
 void deploy_show(struct evhttp_request *req, void *arg)
 {
@@ -75,12 +79,21 @@ void deploy_create(struct evhttp_request *req, void *arg)
         }
 
         // return json
+        char fmt_time[20] = { 0 };
+        get_format_timestamp(fmt_time, sizeof(fmt_time));
+
+        int deploy_id = get_deploy_id();
+        if (-1 == deploy_id) {
+            send_internal_request(req, "get deploy id failure");
+            goto end;
+        }
+
         cJSON *json_ret = cJSON_CreateObject();
-        cJSON_AddItemToObject(json_ret, "id", cJSON_CreateString("aabbcc"));
+        cJSON_AddItemToObject(json_ret, "id", cJSON_CreateNumber(deploy_id));
         cJSON_AddItemToObject(json_ret, "version", cJSON_CreateString(json_ver->valuestring));
         cJSON_AddItemToObject(json_ret, "author", cJSON_CreateString(json_author->valuestring));
         cJSON_AddItemToObject(json_ret, "log_url", cJSON_CreateString("http://xxx.xx"));
-        cJSON_AddItemToObject(json_ret, "create_at", cJSON_CreateString("0000-00-00 00:00:00"));
+        cJSON_AddItemToObject(json_ret, "create_at", cJSON_CreateString(fmt_time));
         cJSON_AddItemToObject(json_ret, "status", cJSON_CreateString("running"));
         char *json_encoded = cJSON_Print(json_ret);
 

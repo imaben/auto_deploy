@@ -5,4 +5,6 @@ void redis_init(char *host, int port);
 
 void redis_free();
 
+int get_deploy_id();
+
 #endif
