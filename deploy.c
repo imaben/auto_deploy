@@ -1,3 +1,4 @@
+#include "deploy.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <netdb.h>
@@ -20,11 +21,14 @@
 #include "worker.h"
 #include "redis.h"
 
-static char *l_host     = "0.0.0.0";
-static short l_port     = 8080;
-static int daemon_mode  = 0;
-static char *redis_addr = NULL;
-static short redis_port = 6379;
+deploy_setting_t *setting, _setting = {
+    .listen_host = "0.0.0.0",
+    .listen_port = 8080,
+    .redis_addr = NULL,
+    .redis_port = 6379,
+    .config_path = "./config.ini",
+    .daemon_mode = 0
+};
 
 #define fatal(fmt, ...) do {             \
     fprintf(stderr, fmt, ##__VA_ARGS__); \
@@ -64,6 +68,7 @@ void usage()
 {
     printf("Usage: auto deploy [options]\n"
            "Options:\n"
+           "    -c <config file> .ini config file\n"
            "    -r <host>        redis host and port\n"
            "    -l <addr>        IP/host listen to\n"
            "    -p <port>        port number\n"
@@ -72,6 +77,7 @@ void usage()
 }
 
 static const struct option options[] = {
+    {"config", 2, NULL, 'c'},
     {"redis",  2, NULL, 'r'},
     {"listen", 2, NULL, 'l'},
     {"port",   2, NULL, 'p'},
@@ -144,12 +150,12 @@ int parse_redis(char *host)
     addrs = (struct in_addr **)he->h_addr_list;
 
     for(i = 0; addrs[i] != NULL; i++) {
-        redis_addr = inet_ntoa(*addrs[i]);
+        setting->redis_addr = inet_ntoa(*addrs[i]);
         break;
     }
 
     if (port) {
-        redis_port = atoi(port);
+        setting->redis_port = atoi(port);
     }
 
     return 0;
@@ -160,24 +166,27 @@ void parse_options(int argc, char **argv)
     int opt, i;
 
     while ((opt = getopt_long(argc, argv,
-                                 "r:l:p:dh", options, &i)) != -1)
+                                 "c:r:l:p:dh", options, &i)) != -1)
     {
         switch (opt) {
-        case 'r':
-            parse_redis(optarg);
-            break;
-        case 'l':
-            l_host = strdup(optarg);
-            break;
-        case 'p':
-            l_port = atoi(optarg);
-            break;
-        case 'd':
-            daemon_mode = 1;
-            break;
-        case 'h':
-        case '?':
-            usage();
+            case 'c':
+                setting->config_path = strdup(optarg);
+                break;
+            case 'r':
+                parse_redis(optarg);
+                break;
+            case 'l':
+                setting->listen_host = strdup(optarg);
+                break;
+            case 'p':
+                setting->listen_port = atoi(optarg);
+                break;
+            case 'd':
+                setting->daemon_mode = 1;
+                break;
+            case 'h':
+            case '?':
+                usage();
         }
     }
 }
@@ -193,6 +202,7 @@ void clean_up(int sign_no)
 
 int main(int argc, char **argv)
 {
+    setting = &_setting;
     sigset_t signal_mask;
     sigemptyset(&signal_mask);
     sigaddset(&signal_mask, SIGPIPE);
@@ -202,16 +212,15 @@ int main(int argc, char **argv)
     signal(SIGQUIT, clean_up);
     signal(SIGTERM, clean_up);
 
-
     parse_options(argc, argv);
 
-    if (daemon_mode) {
+    if (setting->daemon_mode) {
         daemonize();
     }
-    redis_init(redis_addr, redis_port);
+    redis_init(setting->redis_addr, setting->redis_port);
     event_init();
 
-    g_httpd = evhttp_start(l_host, l_port);
+    g_httpd = evhttp_start(setting->listen_host, setting->listen_port);
     evhttp_set_gencb(g_httpd, request_handler, NULL);
     event_dispatch();
 

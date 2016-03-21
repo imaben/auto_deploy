@@ -12,15 +12,16 @@ LDFLAGS += -lutil
 endif
 
 
-all: main.c
+all: deploy.c
 	$(CC) -o daemonize.o daemonize.c $(CFLAGS)
 	$(CC) -o worker.o worker.c $(CFLAGS)
 	$(CC) -o redis.o redis.c $(CFLAGS)
 	$(CC) -o cJSON.o cJSON.c $(CFLAGS)
 	$(CC) -o process.o process.c $(CFLAGS) $(MICRO)
 	$(CC) -o utils.o utils.c $(CFLAGS)
-	$(CC) -o main.o main.c $(CFLAGS)
-	$(CC) -o deploy main.o daemonize.o worker.o redis.o cJSON.o process.o utils.o $(LDFLAGS)
+	$(CC) -o ini.o ini.c $(CFLAGS)
+	$(CC) -o deploy.o deploy.c $(CFLAGS)
+	$(CC) -o deploy deploy.o daemonize.o worker.o redis.o cJSON.o process.o utils.o ini.o $(LDFLAGS)
 
 clean:
 	rm -rf *.o

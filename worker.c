@@ -50,6 +50,11 @@ void deploy_show(struct evhttp_request *req, void *arg)
     free(decode_uri);
 }
 
+static void *thread_deploy_create(void *arg)
+{
+
+}
+
 void deploy_create(struct evhttp_request *req, void *arg)
 {
     const char *orig_uri = "/api/deploy";
