@@ -1,15 +1,16 @@
 # Makefile for Auto Deploy
 C = gcc
 CFLAGS = -g -c `pkg-config --cflags libevent` `pkg-config --cflags hiredis`
-
-OS_KERNEL = `uname`
-ifeq ($(OS_KERNEL), 'Darwin')
-MICRO =	 -D __OSX__
 LDFLAGS = -lm -lpthread `pkg-config --libs libevent` `pkg-config --libs hiredis`
+
+OS_KERNEL = $(shell uname -s)
+ifeq ($(OS_KERNEL), Darwin)
+MICRO =	 -D __OSX__
 else
 MICRO =	 -D __LINUX__
-LDFLAGS = -lm -lpthread `pkg-config --libs libevent` `pkg-config --libs hiredis` -lutil
+LDFLAGS += -lutil
 endif
+
 
 all: main.c
 	$(CC) -o daemonize.o daemonize.c $(CFLAGS)
