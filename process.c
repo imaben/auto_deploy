@@ -4,7 +4,12 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <pthread.h>
+#ifdef __OSX__
 #include <util.h>
+#else
+#include <pty.h>
+#include <utmp.h>
+#endif
 #include "process.h"
 
 #define BUFFER_SIZE 512
