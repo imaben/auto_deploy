@@ -15,8 +15,8 @@ enum {
     MODE_CATCH_MERGE  = 3
 };
 
-typedef void (*output_cb)(void *data, int len);
+typedef void (*output_cb)(void *data, int len, void *addition);
 
-int run_process(char *cmd, int mode, output_cb stdoutcb, output_cb stderrcb);
+int run_process(char *cmd, int mode, output_cb stdoutcb, output_cb stderrcb, void *addition);
 
 #endif

@@ -191,12 +191,21 @@ void parse_options(int argc, char **argv)
     }
 }
 
+int config_init()
+{
+    setting->ini = ini_load(setting->config_path);
+    if (NULL == setting->ini) {
+        fatal("Load config failure!");
+    }
+}
+
 struct evhttp *g_httpd;
 
 void clean_up(int sign_no)
 {
     redis_free();
     evhttp_free(g_httpd);
+    ini_free(setting->ini);
     exit(0);
 }
 
@@ -219,6 +228,7 @@ int main(int argc, char **argv)
     }
     redis_init(setting->redis_addr, setting->redis_port);
     event_init();
+    config_init();
 
     g_httpd = evhttp_start(setting->listen_host, setting->listen_port);
     evhttp_set_gencb(g_httpd, request_handler, NULL);

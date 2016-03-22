@@ -2,11 +2,14 @@
 #include <evhttp.h>
 #include <string.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include "deploy.h"
 #include "worker.h"
 #include "smart_str.h"
 #include "cJSON.h"
 #include "utils.h"
 #include "redis.h"
+#include "process.h"
 
 #define get_buffer_from_req(body, req) do { \
     smart_str *__str = (smart_str *)body; \
@@ -15,6 +18,15 @@
     smart_str_appendl(__str, evbuffer_pullup(__buff, -1), __size); \
     smart_str_0(__str); \
  } while(0)
+
+#define get_deploy_hash_key(s, id) do { \
+    smart_str *__hash_key = (smart_str *)s; \
+    char __deploy_id[16] = { 0 }; \
+    sprintf(__deploy_id, "%d", id); \
+    smart_str_appendl(__hash_key, DEPLOY_HASH_PREFIX, strlen(DEPLOY_HASH_PREFIX)); \
+    smart_str_appendl(__hash_key, __deploy_id, strlen(__deploy_id)); \
+    smart_str_0(__hash_key); \
+} while(0)
 
 static void output(struct evhttp_request *req, char *content, int code)
 {
@@ -31,6 +43,12 @@ static void output(struct evhttp_request *req, char *content, int code)
     output(req, msg, HTTP_OK)
 #define send_internal_request(req, msg) \
     output(req, msg, HTTP_INTERNAL)
+
+struct deploy_create_params {
+    char *author;
+    char *version;
+    int id;
+};
 
 void deploy_show(struct evhttp_request *req, void *arg)
 {
@@ -50,9 +68,64 @@ void deploy_show(struct evhttp_request *req, void *arg)
     free(decode_uri);
 }
 
+static void deploy_create_callback(void *data, int size, void *addition)
+{
+    struct deploy_create_params *params = (struct deploy_create_params *)addition;
+    char deploy_id[16] = { 0 };
+    sprintf(deploy_id, "%d", params->id);
+    smart_str redis_key = { 0 };
+    smart_str_appendl(&redis_key, DEPLOY_LOG_PREFIX, strlen(DEPLOY_LOG_PREFIX));
+    smart_str_appendl(&redis_key, deploy_id, strlen(deploy_id));
+    smart_str_0(&redis_key);
+    ((char *)data)[size] = '\0';
+    redis_append(redis_key.c, (char *)data);
+    smart_str_free(&redis_key);
+}
+
 static void *thread_deploy_create(void *arg)
 {
+    struct deploy_create_params *params = (struct deploy_create_params *)arg;
+    char *deploy_script;
+    int status;
+    smart_str command = { 0 };
 
+    ini_read_str(setting->ini, NULL, "DEPLOY_SCRIPT", &deploy_script, NULL);
+    if (NULL == deploy_script) {
+        // todo write log
+        return NULL;
+    }
+
+    // save to redis
+    char fmt_time[20] = { 0 };
+    get_format_timestamp(fmt_time, sizeof(fmt_time));
+
+    smart_str redis_key = { 0 };
+    get_deploy_hash_key(&redis_key, params->id);
+
+    redis_hash_set(redis_key.c, "author", params->author);
+    redis_hash_set(redis_key.c, "version", params->version);
+    redis_hash_set(redis_key.c, "status", DEPLOY_STATUS_RUNNING);
+    redis_hash_set(redis_key.c, "created_at", fmt_time);
+
+    smart_str_appendl(&command, deploy_script, strlen(deploy_script));
+    smart_str_appendl(&command, " ", 1);
+    smart_str_appendl(&command, params->version, strlen(params->version));
+    smart_str_0(&command);
+    status = run_process(command.c, MODE_CATCH_MERGE, deploy_create_callback, NULL, arg);
+
+    if (WIFEXITED(status)) {
+        redis_hash_set(redis_key.c, "status", DEPLOY_STATUS_SUCCESS);
+    } else {
+        redis_hash_set(redis_key.c, "status", DEPLOY_STATUS_FAILURE);
+    }
+
+    smart_str_free(&command);
+    smart_str_free(&redis_key);
+    free(deploy_script);
+    free(params->author);
+    free(params->version);
+    free(params);
+    params = NULL;
 }
 
 void deploy_create(struct evhttp_request *req, void *arg)
@@ -102,6 +175,13 @@ void deploy_create(struct evhttp_request *req, void *arg)
         cJSON_AddItemToObject(json_ret, "status", cJSON_CreateString("running"));
         char *json_encoded = cJSON_Print(json_ret);
 
+        struct deploy_create_params *thread_params = malloc(sizeof(struct deploy_create_params));
+        thread_params->author = strdup(json_author->valuestring);
+        thread_params->version = strdup(json_ver->valuestring);
+        thread_params->id = deploy_id;
+
+        pthread_t tid;
+        pthread_create(&tid, NULL, thread_deploy_create, thread_params);
         send_normal_request(req, json_encoded);
 
         free(json_encoded);

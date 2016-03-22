@@ -17,6 +17,7 @@
 struct thread_params {
     int fd;
     output_cb cb;
+    void *addition;
 };
 
 static void *thread_proc(void *arg)
@@ -25,12 +26,15 @@ static void *thread_proc(void *arg)
     char buf[BUFFER_SIZE];
     size_t size;
     while ((size = read(params->fd, buf, BUFFER_SIZE)) > 0) {
-        params->cb(buf, size);
+        if (size > BUFFER_SIZE) {
+            break;
+        }
+        params->cb(buf, size, params->addition);
     }
     return NULL;
 }
 
-int run_process(char *cmd, int mode, output_cb stdoutcb, output_cb stderrcb)
+int run_process(char *cmd, int mode, output_cb stdoutcb, output_cb stderrcb, void *addition)
 {
     pid_t pid;
 
@@ -52,11 +56,10 @@ int run_process(char *cmd, int mode, output_cb stdoutcb, output_cb stderrcb)
         close(stdout_pfd[0]);
         close(stderr_pfd[0]);
 
-        //dup2(stdout_pfd[1], STDOUT_FILENO);
         if (mode == MODE_CATCH_BOTH || mode == MODE_CATCH_STDERR) {
             dup2(stderr_pfd[1], STDERR_FILENO);
         } else if (mode == MODE_CATCH_MERGE) {
-            //dup2(stdout_pfd[1], STDERR_FILENO);
+            // nothing todo
         } else if (mode == MODE_CATCH_STDOUT) {
             close(STDERR_FILENO);
         }
@@ -71,8 +74,8 @@ int run_process(char *cmd, int mode, output_cb stdoutcb, output_cb stderrcb)
     close(slave);
     stdout_pfd[0] = master;
 
-    struct thread_params stdout_p = {.fd = stdout_pfd[0], .cb = stdoutcb};
-    struct thread_params stderr_p = {.fd = stderr_pfd[0], .cb = stderrcb};
+    struct thread_params stdout_p = {.fd = stdout_pfd[0], .cb = stdoutcb, .addition = addition};
+    struct thread_params stderr_p = {.fd = stderr_pfd[0], .cb = stderrcb, .addition = addition};
 
     pthread_t stdout_t = 0, stderr_t = 0;
     if (mode == MODE_CATCH_BOTH) {

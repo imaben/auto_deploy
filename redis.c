@@ -1,10 +1,11 @@
 #include "redis.h"
 #include <hiredis.h>
 #include <stdlib.h>
+#include <string.h>
+#include "deploy.h"
+#include "smart_str.h"
 
 static redisContext *g_redis = NULL;
-
-#define DEPLOY_ID_KEY "ad_deploy_id"
 
 void redis_init(char *host, int port)
 {
@@ -34,6 +35,68 @@ void redis_free()
     }
 }
 
+int redis_hash_set(char *key, char *field, char *value)
+{
+    if (!key || !field || !value) {
+        return -1;
+    }
+
+    int r = -1;
+    redisReply *reply = NULL;
+    smart_str command = { 0 };
+    smart_str_appendl(&command, "HSET ", strlen("HSET "));
+    smart_str_appendl(&command, key, strlen(key));
+    smart_str_appendl(&command, " ", 1);
+    smart_str_appendl(&command, field, strlen(field));
+    smart_str_appendl(&command, " ", 1);
+    smart_str_appendl(&command, value, strlen(value));
+    smart_str_0(&command);
+    reply = redisCommand(g_redis, command.c);
+    smart_str_free(&command);
+    if (g_redis->err != 0
+            || reply == NULL
+            || reply->type != REDIS_REPLY_INTEGER)
+    {
+        // todo write warining log
+        fprintf(stderr, "redis hash set failure\n");
+    } else {
+        r = (int)reply->integer;
+    }
+
+    freeReplyObject(reply);
+    return r;
+}
+
+int redis_append(char *key, char *value)
+{
+    if (!key || !value) {
+        return -1;
+    }
+
+    int r = -1;
+    redisReply *reply = NULL;
+    smart_str command = { 0 };
+    smart_str_appendl(&command, "APPEND ", strlen("APPEND "));
+    smart_str_appendl(&command, key, strlen(key));
+    smart_str_appendl(&command, " ", 1);
+    smart_str_appendl(&command, value, strlen(value));
+    smart_str_0(&command);
+    reply = redisCommand(g_redis, command.c);
+    smart_str_free(&command);
+    if (g_redis->err != 0
+            || reply == NULL
+            || reply->type != REDIS_REPLY_INTEGER)
+    {
+        // todo write warining log
+        fprintf(stderr, "redis append failure\n");
+    } else {
+        r = (int)reply->integer;
+    }
+
+    freeReplyObject(reply);
+    return r;
+}
+
 int get_deploy_id()
 {
     redisReply *reply = NULL;
@@ -51,7 +114,6 @@ int get_deploy_id()
     } else {
         deploy_id = (int)reply->integer;
     }
-
 
     freeReplyObject(reply);
     return deploy_id;

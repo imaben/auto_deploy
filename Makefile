@@ -1,5 +1,5 @@
 # Makefile for Auto Deploy
-C = gcc
+C = clang
 CFLAGS = -g -c `pkg-config --cflags libevent` `pkg-config --cflags hiredis`
 LDFLAGS = -lm -lpthread `pkg-config --libs libevent` `pkg-config --libs hiredis`
 
