@@ -22,4 +22,6 @@ extern deploy_setting_t *setting;
 #define   DEPLOY_STATUS_SUCCESS   "success"
 #define   DEPLOY_STATUS_FAILURE   "failure"
 
+#define   DEPLOY_LIST_KEY         "ad_deploy_list"
+
 #endif

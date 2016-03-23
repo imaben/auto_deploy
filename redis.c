@@ -1,5 +1,4 @@
 #include "redis.h"
-#include <hiredis.h>
 #include <stdlib.h>
 #include <string.h>
 #include "deploy.h"
@@ -91,6 +90,62 @@ int redis_append(char *key, char *value)
 
     freeReplyObject(reply);
     return r;
+}
+
+int redis_list_push(char *key, char *value)
+{
+    if (!key || !value) {
+        return -1;
+    }
+
+    int r = -1;
+    redisReply *reply = NULL;
+    smart_str command = { 0 };
+    smart_str_appendl(&command, "LPUSH ", strlen("LPUSH "));
+    smart_str_appendl(&command, key, strlen(key));
+    smart_str_appendl(&command, " ", 1);
+    smart_str_appendl(&command, value, strlen(value));
+    smart_str_0(&command);
+    reply = redisCommand(g_redis, command.c);
+    smart_str_free(&command);
+    if (g_redis->err != 0)
+    {
+        // todo write warining log
+        fprintf(stderr, "redis list push failure\n");
+    } else {
+        r = (int)reply->integer;
+    }
+
+    freeReplyObject(reply);
+    return r;
+
+}
+
+redisReply *redis_list_get(char *key, int offset, int size)
+{
+    if (!key) {
+        return NULL;
+    }
+    redisReply *reply = NULL;
+    smart_str command = { 0 };
+    smart_str_appendl(&command, "LRANGE ", strlen("LRANGE "));
+    smart_str_appendl(&command, key, strlen(key));
+    smart_str_appendl(&command, " ", 1);
+    smart_str_append_long(&command, offset);
+    smart_str_appendl(&command, " ", 1);
+    smart_str_append_long(&command, size);
+    smart_str_0(&command);
+    reply = redisCommand(g_redis, command.c);
+    smart_str_free(&command);
+    if (g_redis->err != 0)
+    {
+        // todo write warining log
+        fprintf(stderr, "redis range list failure\n");
+        freeReplyObject(reply);
+        return NULL;
+    } else {
+        return reply;
+    }
 }
 
 int get_deploy_id()

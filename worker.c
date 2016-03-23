@@ -28,6 +28,12 @@
     smart_str_0(__hash_key); \
 } while(0)
 
+#define push_deploy_to_list(id) do { \
+    char __deploy_id[16] = { 0 }; \
+    sprintf(__deploy_id, "%d", id); \
+    redis_list_push(DEPLOY_LIST_KEY, __deploy_id); \
+ } while(0)
+
 static void output(struct evhttp_request *req, char *content, int code)
 {
     struct evbuffer *buf = evbuffer_new();
@@ -50,16 +56,40 @@ struct deploy_create_params {
     int id;
 };
 
+static void deploy_show_all(struct evhttp_request *req)
+{
+    cJSON *json_ret = cJSON_CreateArray();
+    redisReply *result = redis_list_get(DEPLOY_LIST_KEY, 0, -1);
+    if (result != NULL) {
+        for (int i = 0; i < result->elements; i++) {
+            cJSON *item = cJSON_CreateObject();
+            cJSON_AddItemToObject(item, "id", cJSON_CreateString(result->element[i]->str));
+            cJSON_AddItemToArray(json_ret, item);
+        }
+    }
+    char *json_encoded = cJSON_Print(json_ret);
+    send_normal_request(req, json_encoded);
+
+    freeReplyObject(result);
+    free(json_encoded);
+    cJSON_Delete(json_ret);
+}
+
+static void deploy_show_single(struct evhttp_request *req, char *deploy_id)
+{
+
+}
+
 void deploy_show(struct evhttp_request *req, void *arg)
 {
     const char *orig_uri = "/api/deploy";
     int orig_uri_len = strlen(orig_uri);
     char *decode_uri = strdup((char *)evhttp_request_uri(req));
     if (strcmp(decode_uri, orig_uri) == 0) {
-        // todo: show deploy list
+        deploy_show_all(req);
     } else {
         if (decode_uri[orig_uri_len] != '/' || strlen(decode_uri) == orig_uri_len + 1) {
-            // todo: send 400 page
+            send_bad_request(req, "bad request");
         }
         char *task_id = strdup(decode_uri + orig_uri_len + 1);
         // todo
@@ -96,6 +126,8 @@ static void *thread_deploy_create(void *arg)
     }
 
     // save to redis
+    push_deploy_to_list(params->id);
+
     char fmt_time[20] = { 0 };
     get_format_timestamp(fmt_time, sizeof(fmt_time));
 
@@ -188,7 +220,7 @@ void deploy_create(struct evhttp_request *req, void *arg)
         cJSON_Delete(json);
         cJSON_Delete(json_ret);
     } else {
-        // todo: send 400 page
+        send_bad_request(req, "bad request");
     }
 end:
     smart_str_free(&body);
