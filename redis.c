@@ -47,9 +47,9 @@ int redis_hash_set(char *key, char *field, char *value)
     smart_str_appendl(&command, key, strlen(key));
     smart_str_appendl(&command, " ", 1);
     smart_str_appendl(&command, field, strlen(field));
-    smart_str_appendl(&command, " \"", 2);
+    smart_str_appendl(&command, " '", 2);
     smart_str_appendl(&command, value, strlen(value));
-    smart_str_appendl(&command, "\"", 1);
+    smart_str_appendl(&command, "'", 1);
     smart_str_0(&command);
     reply = redisCommand(g_redis, command.c);
     if (g_redis->err != 0) {

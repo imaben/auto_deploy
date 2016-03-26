@@ -110,8 +110,8 @@ void request_handler(struct evhttp_request *req, void *arg)
     // resolve route
     char *decode_uri = strdup((char *)evhttp_request_uri(req));
     fprintf(stdout , "request: %s\n", decode_uri);
+    int i = 0;
     for (; ;) {
-        static int i = 0;
         if (route_table[i].prefix == NULL && route_table[i].type == 0) {
             break;
         }
