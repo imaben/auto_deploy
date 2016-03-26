@@ -148,6 +148,37 @@ redisReply *redis_list_get(char *key, int offset, int size)
     }
 }
 
+int redis_hash_get(smart_str *str, char *key, char *field)
+{
+
+    if (!key || !field) {
+        return -1;
+    }
+
+    int r = -1;
+    redisReply *reply = NULL;
+    smart_str command = { 0 };
+    smart_str_appendl(&command, "HGET ", strlen("HGET "));
+    smart_str_appendl(&command, key, strlen(key));
+    smart_str_appendl(&command, " ", 1);
+    smart_str_appendl(&command, field, strlen(field));
+    smart_str_0(&command);
+    reply = redisCommand(g_redis, command.c);
+    smart_str_free(&command);
+    if (g_redis->err != 0)
+    {
+        // todo write warining log
+        fprintf(stderr, "redis hash get failure\n");
+    } else {
+        r = 1;
+        smart_str_appendl(str, reply->str, reply->len);
+        smart_str_0(str);
+    }
+
+    freeReplyObject(reply);
+    return r;
+}
+
 int get_deploy_id()
 {
     redisReply *reply = NULL;

@@ -77,7 +77,36 @@ static void deploy_show_all(struct evhttp_request *req)
 
 static void deploy_show_single(struct evhttp_request *req, char *deploy_id)
 {
+#define get_cache_to_json(field) do { \
+        if (redis_hash_get(&(field), redis_key.c, #field)) { \
+            cJSON_AddItemToObject(json_ret, #field, cJSON_CreateString((field).c)); \
+        } \
+    } while(0)
 
+    cJSON *json_ret = cJSON_CreateObject();
+    smart_str redis_key = { 0 };
+    smart_str version = { 0 };
+    smart_str author = { 0 };
+    smart_str created_at = { 0 };
+    smart_str status = { 0 };
+
+    get_deploy_hash_key(&redis_key, atoi(deploy_id));
+
+    get_cache_to_json(version);
+    get_cache_to_json(author);
+    get_cache_to_json(created_at);
+    get_cache_to_json(status);
+
+    char *json_encoded = cJSON_Print(json_ret);
+    send_normal_request(req, json_encoded);
+
+    smart_str_free(&redis_key);
+    smart_str_free(&version);
+    smart_str_free(&author);
+    smart_str_free(&created_at);
+    smart_str_free(&status);
+    cJSON_Delete(json_ret);
+    free(json_encoded);
 }
 
 void deploy_show(struct evhttp_request *req, void *arg)
@@ -92,7 +121,7 @@ void deploy_show(struct evhttp_request *req, void *arg)
             send_bad_request(req, "bad request");
         }
         char *task_id = strdup(decode_uri + orig_uri_len + 1);
-        // todo
+        deploy_show_single(req, task_id);
         free(task_id);
     }
     free(decode_uri);
